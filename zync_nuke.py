@@ -305,7 +305,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     # CREATE KNOBS
     proj_response = ZYNC.get_project_list()
     self.existing_project = nuke.Enumeration_Knob('existing_project', 
-      'Existing Project:', [' '] + proj_response)
+      'Existing Project:', [' '] + [p['name'] for p in proj_response])
 
     self.new_project = nuke.String_Knob('project', ' New Project:')
     self.new_project.clearFlag(nuke.STARTLINE)
