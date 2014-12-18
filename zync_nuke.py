@@ -339,8 +339,6 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     self.num_slots = nuke.Int_Knob('num_slots', 'Num. Slots:')
     self.num_slots.setDefaultValue((1,))
 
-    self.only_running = nuke.Boolean_Knob('only_running', 'Only Use Running Slots')
-
     type_list = []
     non_default = []
     for inst_type in ZYNC.INSTANCE_TYPES:
@@ -354,9 +352,6 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
 
     self.skip_check = nuke.Boolean_Knob('skip_check', 'Skip File Check')
     self.skip_check.setFlag(nuke.STARTLINE)
-
-    self.notify_complete = nuke.Boolean_Knob('notify_complete', 'Notify When Complete')
-    self.notify_complete.setFlag(nuke.STARTLINE)
 
     first = nuke.root().knob('first_frame').value()
     last = nuke.root().knob('last_frame').value()
@@ -405,10 +400,8 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     self.addKnob(self.upload_only)
     self.addKnob(self.priority)
     self.addKnob(self.num_slots)
-    self.addKnob(self.only_running)
     self.addKnob(self.instance_type)
     self.addKnob(self.skip_check)
-    self.addKnob(self.notify_complete)
     self.addKnob(self.frange)
     self.addKnob(self.fstep)
     for k in self.writeNodes:
@@ -418,12 +411,12 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     # collect render-specific knobs for iterating on later
     self.render_knobs = (self.num_slots, self.instance_type,
       self.frange, self.fstep, self.chunk_size, self.skip_check, 
-      self.only_running, self.priority, self.parent_id)
+      self.priority, self.parent_id)
 
     if 'shotgun' in ZYNC.FEATURES and ZYNC.FEATURES['shotgun'] == 1: 
-      height = 450
-    else:
       height = 350
+    else:
+      height = 250
     self.setMinimumSize(400, height)
 
   def update_write_dict(self):
@@ -463,11 +456,9 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     if parent != None and parent != '':
       params['parent_id'] = int(self.parent_id.value())
 
-    # get the opposite of the only_running knob
-    params['start_new_instances'] = '0' if self.only_running.value() else '1'
-
+    params['start_new_instances'] = '1'
     params['skip_check'] = '1' if self.skip_check.value() else '0'
-    params['notify_complete'] = '1' if self.notify_complete.value() else '0'
+    params['notify_complete'] = '0'
 
     if ('shotgun' in ZYNC.FEATURES and ZYNC.FEATURES['shotgun'] == 1 
       and self.sg_create_version.value()):
