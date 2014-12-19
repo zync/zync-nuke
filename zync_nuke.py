@@ -329,7 +329,8 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     self.sg_shot.setFlag(nuke.STARTLINE)
     self.sg_version_code = nuke.String_Knob('sg_version_code', 'Version Code:')
     self.sg_version_code.setFlag(nuke.STARTLINE)
-    script_base, ext = os.path.splitext(os.path.basename(nuke.root().knob('name').getValue()))
+    script_base, ext = os.path.splitext(os.path.basename(
+      nuke.root().knob('name').getValue()))
     self.sg_version_code.setValue(script_base)
     self.hideSGControls()
 
@@ -339,16 +340,14 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     self.num_slots = nuke.Int_Knob('num_slots', 'Num. Slots:')
     self.num_slots.setDefaultValue((1,))
 
-    type_list = []
-    non_default = []
-    for inst_type in ZYNC.INSTANCE_TYPES:
-      if inst_type == ZYNC.DEFAULT_INSTANCE_TYPE:
-        type_list.append('%s (%s)' % (inst_type, ZYNC.INSTANCE_TYPES[inst_type]['description']))
-      else:
-        non_default.append('%s (%s)' % (inst_type, ZYNC.INSTANCE_TYPES[inst_type]['description']))
-    for label in non_default:
-      type_list.append(label) 
-    self.instance_type = nuke.Enumeration_Knob('instance_type', 'Type:', type_list)
+    sorted_types = [t for t in ZYNC.INSTANCE_TYPES]
+    sorted_types.sort(ZYNC.compare_instance_types)
+    display_list = []
+    for inst_type in sorted_types:
+      display_list.append('%s (%s)' % (inst_type, 
+        ZYNC.INSTANCE_TYPES[inst_type]['description']))
+    self.instance_type = nuke.Enumeration_Knob('instance_type', 'Type:', 
+      display_list)
 
     self.skip_check = nuke.Boolean_Knob('skip_check', 'Skip File Check')
     self.skip_check.setFlag(nuke.STARTLINE)
