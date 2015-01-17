@@ -337,7 +337,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     self.priority = nuke.Int_Knob('priority', 'Job Priority:')
     self.priority.setDefaultValue((50,))
 
-    self.num_slots = nuke.Int_Knob('num_slots', 'Num. Slots:')
+    self.num_slots = nuke.Int_Knob('num_slots', 'Num. Machines:')
     self.num_slots.setDefaultValue((1,))
 
     sorted_types = [t for t in ZYNC.INSTANCE_TYPES]
