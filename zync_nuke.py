@@ -80,34 +80,75 @@ def freeze_stereo_node(node, view=None):
 
 def freeze_node(node, view=None):
   """
-  If the node has an expression, evaluate it so that the ZYNC can
-  parse it. Also accounts for and retains frame number expressions.
-  Should be idempotent.
+  If the node has an expression, evaluate it so that Zync receives a file
+  path it can understand. Accounts for and retains frame number expressions.
   """
   knob_names = ['file', 'font']
   for knob_name in knob_names:
-    file_knob = node.knob(knob_name)
-    if file_knob == None:
+    #
+    # Get the named knob.
+    #
+    knob = node.knob(knob_name)
+    #
+    # If the knob does not exist, don't proceed.
+    #
+    if knob == None:
       continue
-    knob_value = file_knob.value()
-
-    # if the file param has an open bracket, let's assume that it's an
-    # expression:
+    #
+    # Get the current value of the knob.
+    #
+    knob_value = knob.value()
+    #
+    # If the knob value has an open bracket, assume it's an expression.
+    #
     if '[' in knob_value:
       if node.Class() == 'Write':
-        file_knob.setValue(nuke.filename(node))
+        knob.setValue(nuke.filename(node))
       else:
-        frozen_path = file_knob.evaluate()
-        frozen_dir = os.path.split(frozen_path)[0]
-        file_expr = os.path.split(knob_value)[-1]
-
-        # sets the read node to be
-        file_knob.setValue(os.path.join(frozen_dir, file_expr))
-
+        #
+        # Running knob.evaluate() will freeze not just expressions, but
+        # frame number as well. Use regex to search for any frame number
+        # expressions, and replace them with a placeholder.
+        #
+        to_eval = knob_value
+        placeholders = {}
+        regexs = [
+          r'#+',
+          r'%.*d'
+        ]
+        for regex in regexs:
+          match = 1
+          while match:
+            match = re.search(regex, to_eval)
+            if match:
+              placeholder = '__frame%d' % (len(placeholders)+1,)
+              original = match.group()
+              placeholders[placeholder] = original
+              to_eval = (to_eval[0:match.start()] + '{%s}' % (placeholder,) + 
+                to_eval[match.end():])
+        #
+        # Set the knob value to our string with placeholders.
+        #
+        knob.setValue(to_eval)
+        #
+        # Now evaluate the knob to freeze the path.
+        #
+        frozen_path = knob.evaluate()
+        #
+        # Use our dictionary of placeholders to place the original frame
+        # number expressions back in.
+        #
+        frozen_path = frozen_path.format(**placeholders)
+        #
+        # Finally, set the frozen path back to the knob.
+        #
+        knob.setValue(frozen_path)
+    #
+    # If a view was given, replace view expressions with that.
+    #
     if view:
       knob_value = knob_value.replace('%v', view.lower())
       knob_value = knob_value.replace('%V', view.upper())
-
       node.knob(knob_name).setValue(knob_value)
 
 def gizmos_to_groups(nodes):
