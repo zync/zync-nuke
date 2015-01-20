@@ -344,6 +344,23 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     self.update_write_dict()
 
     # CREATE KNOBS
+    self.num_slots = nuke.Int_Knob('num_slots', 'Num. Machines:')
+    self.num_slots.setDefaultValue((1,))
+
+    sorted_types = [t for t in ZYNC.INSTANCE_TYPES]
+    sorted_types.sort(ZYNC.compare_instance_types)
+    display_list = []
+    for inst_type in sorted_types:
+      display_list.append('%s (%s)' % (inst_type, 
+        ZYNC.INSTANCE_TYPES[inst_type]['description']))
+    self.instance_type = nuke.Enumeration_Knob('instance_type', 'Type:', 
+      display_list)
+
+    self.pricing_label = nuke.Text_Knob('pricing_label', '')
+    self.pricing_label.setValue('Est. Cost per Hour: Not Available')
+
+    divider01 = nuke.Text_Knob('divider01', '', '')
+
     proj_response = ZYNC.get_project_list()
     self.existing_project = nuke.Enumeration_Knob('existing_project', 
       'Existing Project:', [' '] + [p['name'] for p in proj_response])
@@ -378,17 +395,6 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     self.priority = nuke.Int_Knob('priority', 'Job Priority:')
     self.priority.setDefaultValue((50,))
 
-    self.num_slots = nuke.Int_Knob('num_slots', 'Num. Machines:')
-    self.num_slots.setDefaultValue((1,))
-
-    sorted_types = [t for t in ZYNC.INSTANCE_TYPES]
-    sorted_types.sort(ZYNC.compare_instance_types)
-    display_list = []
-    for inst_type in sorted_types:
-      display_list.append('%s (%s)' % (inst_type, 
-        ZYNC.INSTANCE_TYPES[inst_type]['description']))
-    self.instance_type = nuke.Enumeration_Knob('instance_type', 'Type:', 
-      display_list)
 
     self.skip_check = nuke.Boolean_Knob('skip_check', 'Skip File Check')
     self.skip_check.setFlag(nuke.STARTLINE)
@@ -428,6 +434,10 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     self.chunk_size.setDefaultValue((10,))
 
     # ADD KNOBS
+    self.addKnob(self.num_slots)
+    self.addKnob(self.instance_type)
+    self.addKnob(self.pricing_label)
+    self.addKnob(divider01)
     self.addKnob(self.existing_project)
     self.addKnob(self.new_project)
     self.addKnob(self.parent_id)
@@ -439,8 +449,6 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
       self.addKnob(self.sg_version_code)
     self.addKnob(self.upload_only)
     self.addKnob(self.priority)
-    self.addKnob(self.num_slots)
-    self.addKnob(self.instance_type)
     self.addKnob(self.skip_check)
     self.addKnob(self.frange)
     self.addKnob(self.fstep)
@@ -454,10 +462,12 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
       self.priority, self.parent_id)
 
     if 'shotgun' in ZYNC.FEATURES and ZYNC.FEATURES['shotgun'] == 1: 
-      height = 350
+      height = 440
     else:
-      height = 250
-    self.setMinimumSize(400, height)
+      height = 340
+    self.setMinimumSize(480, height)
+
+    self.update_pricing_label()
 
   def update_write_dict(self):
     wd = dict()
@@ -659,6 +669,8 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
         self.showSGControls()
       else:
         self.hideSGControls()
+    elif knob is self.num_slots or knob is self.instance_type:
+      self.update_pricing_label()
 
   def showModalDialog(self):
     """
@@ -678,7 +690,21 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     self.sg_project.setEnabled(True)
     self.sg_shot.setEnabled(True)
     self.sg_version_code.setEnabled(True)
-  
+ 
+  def update_pricing_label(self):
+    machine_type = self.instance_type.value().split()[0]
+    num_machines = self.num_slots.value()
+    field_name = 'CP-ZYNC-%s-NUKE' % (machine_type.upper(),)
+    print field_name
+    print ZYNC.PRICING['gcp_price_list']
+    print ZYNC.PRICING['gcp_price_list'][field_name]
+    if (field_name in ZYNC.PRICING['gcp_price_list'] and 
+      'us' in ZYNC.PRICING['gcp_price_list'][field_name]):
+      cost = '$%.02f' % ((float(num_machines) * 
+        ZYNC.PRICING['gcp_price_list'][field_name]['us']),) 
+    else:
+      cost = 'Not Available'
+    self.pricing_label.setValue('Est. Cost per Hour: %s' % (cost,))
 
 def submit_dialog():
   global ZYNC
