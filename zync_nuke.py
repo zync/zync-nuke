@@ -351,13 +351,24 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     sorted_types.sort(ZYNC.compare_instance_types)
     display_list = []
     for inst_type in sorted_types:
-      display_list.append('%s (%s)' % (inst_type, 
-        ZYNC.INSTANCE_TYPES[inst_type]['description']))
+      label = '%s (%s)' % (inst_type, 
+        ZYNC.INSTANCE_TYPES[inst_type]['description'])
+      pricing_key = 'CP-ZYNC-%s-NUKE' % (inst_type.upper(),)
+      if (pricing_key in ZYNC.PRICING['gcp_price_list'] and 
+        'us' in ZYNC.PRICING['gcp_price_list'][pricing_key]):
+        label += ' $%s/hr' % (
+          ZYNC.PRICING['gcp_price_list'][pricing_key]['us'],)
+      display_list.append(label)
     self.instance_type = nuke.Enumeration_Knob('instance_type', 'Type:', 
       display_list)
 
     self.pricing_label = nuke.Text_Knob('pricing_label', '')
     self.pricing_label.setValue('Est. Cost per Hour: Not Available')
+
+    calculator_link = nuke.Text_Knob('calculator_link', '')
+    calculator_link.setValue('<a style="color:#ff8a00;" ' +
+      'href="http://zync.cloudpricingcalculator.appspot.com">' +
+      'Cost Calculator</a>')
 
     divider01 = nuke.Text_Knob('divider01', '', '')
 
@@ -376,7 +387,8 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
 
     # create shotgun controls - they'll only be added if shotgun integration
     # is enabled.
-    self.sg_create_version = nuke.Boolean_Knob('sg_create_version', 'Create Shotgun Version')
+    self.sg_create_version = nuke.Boolean_Knob('sg_create_version', 
+      'Create Shotgun Version')
     self.sg_create_version.setFlag(nuke.STARTLINE)
     self.sg_create_version.setValue(False)
     self.sg_user = nuke.String_Knob('sg_user', 'Shotgun User:')
@@ -437,6 +449,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     self.addKnob(self.num_slots)
     self.addKnob(self.instance_type)
     self.addKnob(self.pricing_label)
+    self.addKnob(calculator_link)
     self.addKnob(divider01)
     self.addKnob(self.existing_project)
     self.addKnob(self.new_project)
@@ -462,10 +475,10 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
       self.priority, self.parent_id)
 
     if 'shotgun' in ZYNC.FEATURES and ZYNC.FEATURES['shotgun'] == 1: 
-      height = 440
+      height = 470
     else:
-      height = 340
-    self.setMinimumSize(480, height)
+      height = 370
+    self.setMinimumSize(530, height)
 
     self.update_pricing_label()
 
@@ -695,9 +708,6 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     machine_type = self.instance_type.value().split()[0]
     num_machines = self.num_slots.value()
     field_name = 'CP-ZYNC-%s-NUKE' % (machine_type.upper(),)
-    print field_name
-    print ZYNC.PRICING['gcp_price_list']
-    print ZYNC.PRICING['gcp_price_list'][field_name]
     if (field_name in ZYNC.PRICING['gcp_price_list'] and 
       'us' in ZYNC.PRICING['gcp_price_list'][field_name]):
       cost = '$%.02f' % ((float(num_machines) * 
