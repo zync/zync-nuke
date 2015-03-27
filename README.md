@@ -6,7 +6,7 @@ Tested with all versions of Nuke 7 and 8.
 
 This plugin depends on zync-python, the Zync Python API.
 
-Before trying to install zync-maya, make sure to [download zync-python](https://github.com/zync/zync-python) and follow the setup instructions there.
+Before trying to install zync-nuke, make sure to [download zync-python](https://github.com/zync/zync-python) and follow the setup instructions there.
 
 ## Clone the Repository
 
