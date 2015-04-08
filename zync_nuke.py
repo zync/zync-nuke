@@ -85,19 +85,15 @@ def freeze_node(node, view=None):
   """
   knob_names = ['file', 'font']
   for knob_name in knob_names:
-    #
-    # Get the named knob.
-    #
     knob = node.knob(knob_name)
-    #
-    # If the knob does not exist, don't proceed.
-    #
     if knob == None:
       continue
-    #
-    # Get the current value of the knob.
-    #
     knob_value = knob.value()
+    #
+    # If the value returned is not a string, do not continue.
+    #
+    if not isinstance(knob_value, basestring):
+      continue
     #
     # If the knob value has an open bracket, assume it's an expression.
     #
