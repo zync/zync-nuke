@@ -243,18 +243,43 @@ class PasswordPrompt(nukescripts.panels.PythonPanel):
     super(PasswordPrompt, self).__init__(title)
 
     self.__password = None
+    self.__loginType = 'zync'
 
     self.username = nuke.String_Knob('username', 'Username: ')
     if user_default != None:
       self.username.setValue(user_default)
     self.password = nuke.Password_Knob('password', 'Password: ')
+
+    # add login button. logic is handled in knobChanged(). button
+    # must be named okButton to prevent Nuke from adding default
+    # OK/Cancel buttons.
+    self.okButton = nuke.Script_Knob('login', 'Login')
+
+    # add login with google button - logic is handled in knobChanged()
+    self.loginWithGoogleButton = nuke.Script_Knob('loginWithGoogle', 'Login With Google')
+
+    # add cancel button - logic is handled in knobChanged()
+    self.cancelButton = nuke.Script_Knob('cancel', 'Cancel')
+
     self.addKnob(self.username)
     self.addKnob(self.password)
+    self.addKnob(self.okButton)
+    self.addKnob(self.__getDivider())
+    self.addKnob(self.loginWithGoogleButton)
+    self.addKnob(self.__getDivider())
+    self.addKnob(self.cancelButton)
 
   def knobChanged(self, knob):
-    if knob == self.password:
-      self.__password = knob.value()
-      knob.setValue(len(knob.value()) * '*')
+    #if knob == self.loginWithGoogleButton:
+    #if knob == self.password:
+    #  self.__password = knob.value()
+    #  knob.setValue(len(knob.value()) * '*')
+    if knob == self.cancelButton:
+      self.cancel()
+    elif knob == self.okButton:
+      self.ok()
+    elif knob == self.loginWithGoogleButton:
+      self.loginWithGoogle()
 
   def get_password(self):
     """
@@ -268,7 +293,18 @@ class PasswordPrompt(nukescripts.panels.PythonPanel):
     """
     result = super(PasswordPrompt, self).showModalDialog()
     if result:
-      return (self.username.value(), self.__password)
+      if self.__loginType == 'google':
+        return 'google', None, None
+      else:
+        #return 'zync', self.username.value(), self.__password
+        return 'zync', self.username.value(), self.password.value()
+
+  def __getDivider(self):
+    return nuke.Text_Knob('divider', '', '')
+
+  def loginWithGoogle(self):
+    self.__loginType = 'google'
+    self.ok()
 
 class WriteChanges(object):
   """
@@ -548,15 +584,14 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
       if not skip_answer:
         return
 
-    if not username and not password:
-      # prompt username and password:
-      msg = 'Zync Login'
-      pw_prompt = PasswordPrompt(title=msg, user_default=self.usernameDefault)
-      try:
-        user, pw = pw_prompt.get_password()
-      except Exception:
-        msg = 'You must have a Zync account to submit a job.'
-        raise Exception(msg)
+    # prompt for login 
+    msg = 'Zync Login'
+    pw_prompt = PasswordPrompt(title=msg, user_default=self.usernameDefault)
+    try:
+      login_type, user, pw = pw_prompt.get_password()
+    except Exception:
+      msg = 'You must have a Zync account to submit a job.'
+      raise Exception(msg)
 
     selected_write_names = []
     selected_write_nodes = []
@@ -621,7 +656,10 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     #nuke.callbacks.beforeRenders
 
     try:
-      ZYNC.login(username=user, password=pw)
+      if login_type == 'google':
+        ZYNC.login_with_google()
+      else:
+        ZYNC.login(username=user, password=pw)
     except zync.ZyncAuthenticationError as e:
       raise Exception('Zync Login Failed:\n\n%s' % (str(e),))
 
