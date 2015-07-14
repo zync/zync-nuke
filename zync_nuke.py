@@ -270,10 +270,6 @@ class PasswordPrompt(nukescripts.panels.PythonPanel):
     self.addKnob(self.cancelButton)
 
   def knobChanged(self, knob):
-    #if knob == self.loginWithGoogleButton:
-    #if knob == self.password:
-    #  self.__password = knob.value()
-    #  knob.setValue(len(knob.value()) * '*')
     if knob == self.cancelButton:
       self.cancel()
     elif knob == self.okButton:
@@ -281,7 +277,7 @@ class PasswordPrompt(nukescripts.panels.PythonPanel):
     elif knob == self.loginWithGoogleButton:
       self.loginWithGoogle()
 
-  def get_password(self):
+  def get_authentication_info(self):
     """
     Function alias for showModalDialog
     """
@@ -588,7 +584,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     msg = 'Zync Login'
     pw_prompt = PasswordPrompt(title=msg, user_default=self.usernameDefault)
     try:
-      login_type, user, pw = pw_prompt.get_password()
+      login_type, user, pw = pw_prompt.get_authentication_info()
     except Exception:
       msg = 'You must have a Zync account to submit a job.'
       raise Exception(msg)
