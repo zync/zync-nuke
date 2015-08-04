@@ -22,11 +22,14 @@ import time
 import traceback
 import urllib
 
-config_path = os.path.join(os.path.dirname(__file__), 'config_nuke.py')
-if not os.path.exists(config_path):
-  raise Exception('Could not locate config_nuke.py, please create.')
-
-from config_nuke import *
+if os.environ.get('ZYNC_API_DIR') and os.environ.get('ZYNC_NUKE_API_KEY'):
+  API_DIR = os.environ.get('ZYNC_API_DIR')
+  API_KEY = os.environ.get('ZYNC_NUKE_API_KEY')
+else:
+  config_path = os.path.join(os.path.dirname(__file__), 'config_nuke.py')
+  if not os.path.exists(config_path):
+    raise Exception('Could not locate config_nuke.py, please create.')
+  from config_nuke import *
 
 required_config = ['API_DIR', 'API_KEY']
 
