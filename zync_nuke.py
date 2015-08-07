@@ -40,7 +40,7 @@ import zync
 def get_dependent_nodes(root):
   """
   Returns a list of all of the root node's dependencies.
-  Uses `nuke.dependencies()`. This will work with nested 
+  Uses `nuke.dependencies()`. This will work with nested
   dependencies.
   """
   all_deps = set([root])
@@ -120,7 +120,7 @@ def freeze_node(node, view=None):
               placeholder = '__frame%d' % (len(placeholders)+1,)
               original = match.group()
               placeholders[placeholder] = original
-              to_eval = (to_eval[0:match.start()] + '{%s}' % (placeholder,) + 
+              to_eval = (to_eval[0:match.start()] + '{%s}' % (placeholder,) +
                 to_eval[match.end():])
         #
         # Set the knob value to our string with placeholders.
@@ -157,7 +157,7 @@ def gizmos_to_groups(nodes):
     node_list = nuke.allNodes(recurseGroups=True)
   except:
     node_list = nuke.allNodes()
-  for node in node_list: 
+  for node in node_list:
     node.setSelected(False)
   for node in nodes:
     if hasattr(node, 'makeGroup') and callable(getattr(node, 'makeGroup')):
@@ -232,7 +232,7 @@ def preflight(view=None):
   Returning True = success, False = failure
   """
   return True
-    
+
 class PasswordPrompt(nukescripts.panels.PythonPanel):
   """
   A username/password prompt.
@@ -379,15 +379,18 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     sorted_types.sort(ZYNC.compare_instance_types)
     display_list = []
     for inst_type in sorted_types:
-      label = '%s (%s)' % (inst_type, 
-        ZYNC.INSTANCE_TYPES[inst_type]['description'])
-      pricing_key = 'CP-ZYNC-%s-NUKE' % (inst_type.upper(),)
-      if (pricing_key in ZYNC.PRICING['gcp_price_list'] and 
+      label = '%s (%s)' % (inst_type,
+        ZYNC.INSTANCE_TYPES[inst_type]['description'].replace(', preemptible',''))
+      inst_type_base = inst_type.split(' ')[-1]
+      pricing_key = 'CP-ZYNC-%s-NUKE' % (inst_type_base.upper(),)
+      if 'PREEMPTIBLE' in inst_type.upper():
+        pricing_key += '-PREEMPTIBLE'
+      if (pricing_key in ZYNC.PRICING['gcp_price_list'] and
         'us' in ZYNC.PRICING['gcp_price_list'][pricing_key]):
         label += ' $%s/hr' % (
           ZYNC.PRICING['gcp_price_list'][pricing_key]['us'],)
       display_list.append(label)
-    self.instance_type = nuke.Enumeration_Knob('instance_type', 'Type:', 
+    self.instance_type = nuke.Enumeration_Knob('instance_type', 'Type:',
       display_list)
 
     self.pricing_label = nuke.Text_Knob('pricing_label', '')
@@ -401,7 +404,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     divider01 = nuke.Text_Knob('divider01', '', '')
 
     proj_response = ZYNC.get_project_list()
-    self.existing_project = nuke.Enumeration_Knob('existing_project', 
+    self.existing_project = nuke.Enumeration_Knob('existing_project',
       'Existing Project:', [' '] + [p['name'] for p in proj_response])
 
     self.new_project = nuke.String_Knob('project', ' New Project:')
@@ -415,7 +418,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
 
     # create shotgun controls - they'll only be added if shotgun integration
     # is enabled.
-    self.sg_create_version = nuke.Boolean_Knob('sg_create_version', 
+    self.sg_create_version = nuke.Boolean_Knob('sg_create_version',
       'Create Shotgun Version')
     self.sg_create_version.setFlag(nuke.STARTLINE)
     self.sg_create_version.setValue(False)
@@ -482,7 +485,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     self.addKnob(self.existing_project)
     self.addKnob(self.new_project)
     self.addKnob(self.parent_id)
-    if 'shotgun' in ZYNC.FEATURES and ZYNC.FEATURES['shotgun'] == 1: 
+    if 'shotgun' in ZYNC.FEATURES and ZYNC.FEATURES['shotgun'] == 1:
       self.addKnob(self.sg_create_version)
       self.addKnob(self.sg_user)
       self.addKnob(self.sg_project)
@@ -499,10 +502,10 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
 
     # collect render-specific knobs for iterating on later
     self.render_knobs = (self.num_slots, self.instance_type,
-      self.frange, self.fstep, self.chunk_size, self.skip_check, 
+      self.frange, self.fstep, self.chunk_size, self.skip_check,
       self.priority, self.parent_id)
 
-    if 'shotgun' in ZYNC.FEATURES and ZYNC.FEATURES['shotgun'] == 1: 
+    if 'shotgun' in ZYNC.FEATURES and ZYNC.FEATURES['shotgun'] == 1:
       height = 470
     else:
       height = 370
@@ -551,7 +554,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     params['skip_check'] = '1' if self.skip_check.value() else '0'
     params['notify_complete'] = '0'
 
-    if ('shotgun' in ZYNC.FEATURES and ZYNC.FEATURES['shotgun'] == 1 
+    if ('shotgun' in ZYNC.FEATURES and ZYNC.FEATURES['shotgun'] == 1
       and self.sg_create_version.value()):
       params['sg_user'] = self.sg_user.value()
       params['sg_project'] = self.sg_project.value()
@@ -580,7 +583,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
       if not skip_answer:
         return
 
-    # prompt for login 
+    # prompt for login
     msg = 'Zync Login'
     pw_prompt = PasswordPrompt(title=msg, user_default=self.usernameDefault)
     try:
@@ -638,9 +641,9 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
           node_list = nuke.allNodes(recurseGroups=True)
         except:
           node_list = nuke.allNodes()
-        for node in node_list: 
+        for node in node_list:
           freeze_node(node)
-      
+
     if not preflight_result:
       return
 
@@ -733,15 +736,18 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     self.sg_project.setEnabled(True)
     self.sg_shot.setEnabled(True)
     self.sg_version_code.setEnabled(True)
- 
+
   def update_pricing_label(self):
-    machine_type = self.instance_type.value().split()[0]
+    machine_type = self.instance_type.value().split(' (')[0]
     num_machines = self.num_slots.value()
-    field_name = 'CP-ZYNC-%s-NUKE' % (machine_type.upper(),)
-    if (field_name in ZYNC.PRICING['gcp_price_list'] and 
+    machine_type_base = machine_type.split(' ')[-1]
+    field_name = 'CP-ZYNC-%s-NUKE' % (machine_type_base.upper(),)
+    if 'PREEMPTIBLE' in machine_type.upper():
+      field_name += '-PREEMPTIBLE'
+    if (field_name in ZYNC.PRICING['gcp_price_list'] and
       'us' in ZYNC.PRICING['gcp_price_list'][field_name]):
-      cost = '$%.02f' % ((float(num_machines) * 
-        ZYNC.PRICING['gcp_price_list'][field_name]['us']),) 
+      cost = '$%.02f' % ((float(num_machines) *
+        ZYNC.PRICING['gcp_price_list'][field_name]['us']),)
     else:
       cost = 'Not Available'
     self.pricing_label.setValue('Est. Cost per Hour: %s' % (cost,))
