@@ -380,7 +380,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     display_list = []
     for inst_type in sorted_types:
       label = '%s (%s)' % (inst_type,
-        ZYNC.INSTANCE_TYPES[inst_type]['description'])
+        ZYNC.INSTANCE_TYPES[inst_type]['description'].replace(', preemptible',''))
       inst_type_base = inst_type.split(' ')[-1]
       pricing_key = 'CP-ZYNC-%s-NUKE' % (inst_type_base.upper(),)
       if 'PREEMPTIBLE' in inst_type.upper():
