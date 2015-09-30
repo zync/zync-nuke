@@ -92,23 +92,17 @@ def freeze_node(node, view=None):
     if knob == None:
       continue
     knob_value = knob.value()
-    #
     # If the value returned is not a string, do not continue.
-    #
     if not isinstance(knob_value, basestring):
       continue
-    #
     # If the knob value has an open bracket, assume it's an expression.
-    #
     if '[' in knob_value:
       if node.Class() == 'Write':
         knob.setValue(nuke.filename(node))
       else:
-        #
         # Running knob.evaluate() will freeze not just expressions, but
         # frame number as well. Use regex to search for any frame number
         # expressions, and replace them with a placeholder.
-        #
         to_eval = knob_value
         placeholders = {}
         regexs = [
@@ -125,26 +119,24 @@ def freeze_node(node, view=None):
               placeholders[placeholder] = original
               to_eval = (to_eval[0:match.start()] + '{%s}' % (placeholder,) +
                 to_eval[match.end():])
-        #
         # Set the knob value to our string with placeholders.
-        #
         knob.setValue(to_eval)
-        #
         # Now evaluate the knob to freeze the path.
-        #
         frozen_path = knob.evaluate()
-        #
         # Use our dictionary of placeholders to place the original frame
         # number expressions back in.
-        #
         frozen_path = frozen_path.format(**placeholders)
-        #
         # Finally, set the frozen path back to the knob.
-        #
         knob.setValue(frozen_path)
-    #
+    # For Write node paths, if the path is relative expand it using the
+    # project directory, which is the directory in which the Nuke script
+    # lives.
+    if node.Class() == 'Write':
+      if not os.path.isabs(knob_value):
+        project_dir = os.path.dirname(nuke.root().knob('name').getValue())
+        absolute_path = os.path.abspath(os.path.join(project_dir, knob_value))
+        knob.setValue(absolute_path)
     # If a view was given, replace view expressions with that.
-    #
     if view:
       knob_value = knob_value.replace('%v', view.lower())
       knob_value = knob_value.replace('%V', view.upper())
