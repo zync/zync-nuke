@@ -129,12 +129,14 @@ def freeze_node(node, view=None):
         # Finally, set the frozen path back to the knob.
         knob.setValue(frozen_path)
     # For Write node paths, if the path is relative expand it using the
-    # project directory, which is the directory in which the Nuke script
-    # lives.
+    # project directory. If no project directory is set, fall back to
+    # using the directory in which the Nuke script lives.
     if node.Class() == 'Write':
-      if not os.path.isabs(knob_value):
-        project_dir = os.path.dirname(nuke.root().knob('name').getValue())
-        absolute_path = os.path.abspath(os.path.join(project_dir, knob_value))
+      if not os.path.isabs(knob.value()):
+        project_dir = nuke.root().knob('project_directory').evaluate()
+        if not project_dir:
+          project_dir = os.path.dirname(nuke.root().knob('name').getValue())
+        absolute_path = os.path.abspath(os.path.join(project_dir, knob.value()))
         knob.setValue(absolute_path)
     # If a view was given, replace view expressions with that.
     if view:
