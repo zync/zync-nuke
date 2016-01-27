@@ -230,75 +230,6 @@ def preflight(view=None):
   """
   return True
 
-class PasswordPrompt(nukescripts.panels.PythonPanel):
-  """
-  A username/password prompt.
-  """
-  def __init__(self, title=None, user_default=None):
-    if not title:
-      title = ''
-    super(PasswordPrompt, self).__init__(title)
-
-    self.__password = None
-    self.__loginType = 'zync'
-
-    self.username = nuke.String_Knob('username', 'Username: ')
-    if user_default != None:
-      self.username.setValue(user_default)
-    self.password = nuke.Password_Knob('password', 'Password: ')
-
-    # add login button. logic is handled in knobChanged(). button
-    # must be named okButton to prevent Nuke from adding default
-    # OK/Cancel buttons.
-    self.okButton = nuke.Script_Knob('login', 'Login')
-
-    # add login with google button - logic is handled in knobChanged()
-    self.loginWithGoogleButton = nuke.Script_Knob('loginWithGoogle', 'Login With Google')
-
-    # add cancel button - logic is handled in knobChanged()
-    self.cancelButton = nuke.Script_Knob('cancel', 'Cancel')
-
-    self.addKnob(self.username)
-    self.addKnob(self.password)
-    self.addKnob(self.okButton)
-    self.addKnob(self.__getDivider())
-    self.addKnob(self.loginWithGoogleButton)
-    self.addKnob(self.__getDivider())
-    self.addKnob(self.cancelButton)
-
-  def knobChanged(self, knob):
-    if knob == self.cancelButton:
-      self.cancel()
-    elif knob == self.okButton:
-      self.ok()
-    elif knob == self.loginWithGoogleButton:
-      self.loginWithGoogle()
-
-  def get_authentication_info(self):
-    """
-    Function alias for showModalDialog
-    """
-    return self.showModalDialog()
-
-  def showModalDialog(self):
-    """
-    Puts the PasswordPrompt in a modal dialog box and returns the inputs
-    """
-    result = super(PasswordPrompt, self).showModalDialog()
-    if result:
-      if self.__loginType == 'google':
-        return 'google', None, None
-      else:
-        #return 'zync', self.username.value(), self.__password
-        return 'zync', self.username.value(), self.password.value()
-
-  def __getDivider(self):
-    return nuke.Text_Knob('divider', '', '')
-
-  def loginWithGoogle(self):
-    self.__loginType = 'google'
-    self.ok()
-
 class WriteChanges(object):
   """
   Given a script to save to, will save all of the changes made in the
@@ -398,8 +329,6 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
       'href="http://zync.cloudpricingcalculator.appspot.com">' +
       'Cost Calculator</a>')
 
-    divider01 = nuke.Text_Knob('divider01', '', '')
-
     proj_response = ZYNC.get_project_list()
     self.existing_project = nuke.Enumeration_Knob('existing_project',
       'Existing Project:', [' '] + [p['name'] for p in proj_response])
@@ -434,7 +363,6 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
 
     self.priority = nuke.Int_Knob('priority', 'Job Priority:')
     self.priority.setDefaultValue((50,))
-
 
     self.skip_check = nuke.Boolean_Knob('skip_check', 'Skip File Check')
     self.skip_check.setFlag(nuke.STARTLINE)
@@ -473,12 +401,29 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     self.chunk_size = nuke.Int_Knob('chunk_size', 'Chunk Size:')
     self.chunk_size.setDefaultValue((10,))
 
+    # controls for logging in and out
+    self.loginButton = nuke.Script_Knob('login', 'Login With Google')
+    self.logoutButton = nuke.Script_Knob('logout', 'Logout')
+    # keep everything on the same line
+    self.logoutButton.clearFlag(nuke.STARTLINE)
+    self.userLabel = nuke.Text_Knob('user_label', '')
+    # set value to whitespace, otherwise Nuke draws an unsightly line
+    # through the element
+    self.userLabel.setValue(' ')
+    self.userLabel.clearFlag(nuke.STARTLINE)
+
+    # these buttons must be named okButton and cancelButton for Nuke
+    # to add default OK/Cancel functionality. if named something else,
+    # Nuke will add its own default buttons.
+    self.okButton = nuke.Script_Knob('submit', 'Submit Job')
+    self.cancelButton = nuke.Script_Knob('cancel', 'Cancel')
+
     # ADD KNOBS
     self.addKnob(self.num_slots)
     self.addKnob(self.instance_type)
     self.addKnob(self.pricing_label)
     self.addKnob(calculator_link)
-    self.addKnob(divider01)
+    self.addKnob(self.__getDivider())
     self.addKnob(self.existing_project)
     self.addKnob(self.new_project)
     self.addKnob(self.parent_id)
@@ -496,6 +441,13 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     for k in self.writeNodes:
       self.addKnob(k)
     self.addKnob(self.chunk_size)
+    self.addKnob(self.__getDivider())
+    self.addKnob(self.loginButton)
+    self.addKnob(self.logoutButton)
+    self.addKnob(self.userLabel)
+    self.addKnob(self.__getDivider())
+    self.addKnob(self.okButton)
+    self.addKnob(self.cancelButton)
 
     # collect render-specific knobs for iterating on later
     self.render_knobs = (self.num_slots, self.instance_type,
@@ -503,12 +455,16 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
       self.priority, self.parent_id)
 
     if 'shotgun' in ZYNC.FEATURES and ZYNC.FEATURES['shotgun'] == 1:
-      height = 470
+      height = 510
     else:
-      height = 370
-    self.setMinimumSize(530, height)
+      height = 410
+    self.setMinimumSize(600, height)
 
     self.update_pricing_label()
+
+  def __getDivider(self):
+    """Get a divider, a horizontal line used for organizing UI elements."""
+    return nuke.Text_Knob('divider', '', '')
 
   def update_write_dict(self):
     wd = dict()
@@ -560,17 +516,20 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
 
     return params
 
-  def submit(self, username=None, password=None):
+  def submit_checks(self):
+    """Check current settings and raise errors for anything that
+    could cause problems when submitting the job.
+
+    Raises:
+      zync.ZyncError for any issues found
     """
-    Does the work to submit the current Nuke script to Zync,
-    given that the parameters on the dialog are set.
-    """
+    if not ZYNC.has_user_login():
+      raise zync.ZyncError('Please login before submitting a job.')
 
     if self.existing_project.value().strip() == '' and self.new_project.value().strip() == '':
-      nuke.message('Project name cannot be blank. Please either choose ' +
+      raise zync.ZyncError('Project name cannot be blank. Please either choose ' +
         'an existing project from the dropdown or enter the desired ' +
         'project name in the New Project field.')
-      return
 
     if self.skip_check.value():
       skip_answer = nuke.ask('You\'ve asked Zync to skip the file check ' +
@@ -578,16 +537,13 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
         'job WILL error. Your nuke script will still be uploaded. Are ' +
         'you sure you want to continue?')
       if not skip_answer:
-        return
+        raise zync.ZyncError('Job submission canceled.')
 
-    # prompt for login
-    msg = 'Zync Login'
-    pw_prompt = PasswordPrompt(title=msg, user_default=self.usernameDefault)
-    try:
-      login_type, user, pw = pw_prompt.get_authentication_info()
-    except Exception:
-      msg = 'You must have a Zync account to submit a job.'
-      raise Exception(msg)
+  def submit(self):
+    """
+    Does the work to submit the current Nuke script to Zync,
+    given that the parameters on the dialog are set.
+    """
 
     selected_write_names = []
     selected_write_nodes = []
@@ -652,14 +608,6 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     #nuke.callbacks.beforeRenders
 
     try:
-      if login_type == 'google':
-        ZYNC.login_with_google()
-      else:
-        ZYNC.login(username=user, password=pw)
-    except zync.ZyncAuthenticationError as e:
-      raise Exception('Zync Login Failed:\n\n%s' % (str(e),))
-
-    try:
       render_params = self.get_params()
       if render_params == None:
         return
@@ -669,37 +617,34 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
 
     nuke.message('Job submitted to ZYNC.')
 
-  def addToPane(self):
-    """
-    Does some work to make the ZyncRenderPanel work as a persistent pane:
-      * adds persistent Username/Password fields
-      * adds a submit button
-      * adds an update UI callback to update the Write node Enum knob
-    """
-    self.user = nuke.String_Knob('user', 'Username')
-    self.password = nuke.Password_Knob('password', 'Password')
-
-    self.submit = nuke.PyScript_Knob('submit', 'Submit')
-    self.submit.setFlag(nuke.STARTLINE)
-
-    self.addKnob(self.user)
-    self.addKnob(self.password)
-    self.addKnob(self.submit)
-    super(ZyncRenderPanel, self).addToPane()
-
-    nuke.callbacks.addUpdateUI(self.update_write_dict, nodeClass='Write')
-
   def knobChanged(self, knob):
-    """
-    Handles knob callbacks
-    """
-    # if we're in pane mode and the submit button has been called:
-    if hasattr(self, 'sc') and knob is self.submit:
-      user = self.user.value()
-      pw = self.password.value()
-      if not user or not pw:
-        return None
-      self.submit(user, pw)
+    """Handles knob callbacks."""
+    # "submit job" button
+    if knob is self.okButton:
+      # run presubmit checks to make sure the job is ready to be
+      # launched with the currently selected parameters. we do
+      # this here so we can display errors to the user before
+      # the dialog closes and destroys all of their settings. we
+      # cannot do the full job submission here though, because
+      # trying to use nuke.Undo functionality while a modal dialog
+      # is open crashes Nuke.
+      try:
+        self.submit_checks()
+      # raised exceptions will automatically cause Nuke to abort
+      # and leave the dialog open. we just capture that and show
+      # a message to the user so they know what went wrong. the
+      # full exception will be printed to the Script Editor for
+      # further debugging.
+      except Exception as e:
+        nuke.message(str(e))
+        raise
+    elif knob is self.loginButton:
+      # run the auth flow, and display the user's email address,
+      # adding a little whitespace padding for visual clarity.
+      self.userLabel.setValue('  %s' % ZYNC.login_with_google())
+    elif knob is self.logoutButton:
+      ZYNC.logout()
+      self.userLabel.setValue('')
     elif knob is self.upload_only:
       checked = self.upload_only.value()
       for rk in self.render_knobs:
@@ -719,8 +664,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     """
     Shows the Zync Submit dialog and does the work to submit it.
     """
-    result = nukescripts.panels.PythonPanel.showModalDialog(self)
-    if result:
+    if nukescripts.panels.PythonPanel.showModalDialog(self):
       self.submit()
 
   def hideSGControls(self):
