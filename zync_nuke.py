@@ -22,16 +22,15 @@ import time
 import traceback
 import urllib
 
-if os.environ.get('ZYNC_API_DIR') and os.environ.get('ZYNC_NUKE_API_KEY'):
+if os.environ.get('ZYNC_API_DIR'):
   API_DIR = os.environ.get('ZYNC_API_DIR')
-  API_KEY = os.environ.get('ZYNC_NUKE_API_KEY')
 else:
   config_path = os.path.join(os.path.dirname(__file__), 'config_nuke.py')
   if not os.path.exists(config_path):
     raise Exception('Could not locate config_nuke.py, please create.')
   from config_nuke import *
 
-required_config = ['API_DIR', 'API_KEY']
+required_config = ['API_DIR']
 
 for key in required_config:
   if not key in globals():
@@ -287,6 +286,8 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
       msg = 'Please save your script before rendering on Zync.'
       raise Exception(msg)
 
+    self.zync_conn = zync.Zync(application='nuke')
+
     nukescripts.panels.PythonPanel.__init__(self, 'Zync Render',
       'com.google.zync')
 
@@ -303,20 +304,20 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     self.num_slots = nuke.Int_Knob('num_slots', 'Num. Machines:')
     self.num_slots.setDefaultValue((1,))
 
-    sorted_types = [t for t in ZYNC.INSTANCE_TYPES]
-    sorted_types.sort(ZYNC.compare_instance_types)
+    sorted_types = [t for t in self.zync_conn.INSTANCE_TYPES]
+    sorted_types.sort(self.zync_conn.compare_instance_types)
     display_list = []
     for inst_type in sorted_types:
       label = '%s (%s)' % (inst_type,
-        ZYNC.INSTANCE_TYPES[inst_type]['description'].replace(', preemptible',''))
+        self.zync_conn.INSTANCE_TYPES[inst_type]['description'].replace(', preemptible',''))
       inst_type_base = inst_type.split(' ')[-1]
       pricing_key = 'CP-ZYNC-%s-NUKE' % (inst_type_base.upper(),)
       if 'PREEMPTIBLE' in inst_type.upper():
         pricing_key += '-PREEMPTIBLE'
-      if (pricing_key in ZYNC.PRICING['gcp_price_list'] and
-        'us' in ZYNC.PRICING['gcp_price_list'][pricing_key]):
+      if (pricing_key in self.zync_conn.PRICING['gcp_price_list'] and
+        'us' in self.zync_conn.PRICING['gcp_price_list'][pricing_key]):
         label += ' $%s/hr' % (
-          ZYNC.PRICING['gcp_price_list'][pricing_key]['us'],)
+          self.zync_conn.PRICING['gcp_price_list'][pricing_key]['us'],)
       display_list.append(label)
     self.instance_type = nuke.Enumeration_Knob('instance_type', 'Type:',
       display_list)
@@ -329,7 +330,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
       'href="http://zync.cloudpricingcalculator.appspot.com">' +
       'Cost Calculator</a>')
 
-    proj_response = ZYNC.get_project_list()
+    proj_response = self.zync_conn.get_project_list()
     self.existing_project = nuke.Enumeration_Knob('existing_project',
       'Existing Project:', [' '] + [p['name'] for p in proj_response])
 
@@ -407,9 +408,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     # keep everything on the same line
     self.logoutButton.clearFlag(nuke.STARTLINE)
     self.userLabel = nuke.Text_Knob('user_label', '')
-    # set value to whitespace, otherwise Nuke draws an unsightly line
-    # through the element
-    self.userLabel.setValue(' ')
+    self.userLabel.setValue('  %s' % self.zync_conn.email)
     self.userLabel.clearFlag(nuke.STARTLINE)
 
     # these buttons must be named okButton and cancelButton for Nuke
@@ -427,7 +426,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     self.addKnob(self.existing_project)
     self.addKnob(self.new_project)
     self.addKnob(self.parent_id)
-    if 'shotgun' in ZYNC.FEATURES and ZYNC.FEATURES['shotgun'] == 1:
+    if 'shotgun' in self.zync_conn.FEATURES and self.zync_conn.FEATURES['shotgun'] == 1:
       self.addKnob(self.sg_create_version)
       self.addKnob(self.sg_user)
       self.addKnob(self.sg_project)
@@ -454,7 +453,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
       self.frange, self.fstep, self.chunk_size, self.skip_check,
       self.priority, self.parent_id)
 
-    if 'shotgun' in ZYNC.FEATURES and ZYNC.FEATURES['shotgun'] == 1:
+    if 'shotgun' in self.zync_conn.FEATURES and self.zync_conn.FEATURES['shotgun'] == 1:
       height = 510
     else:
       height = 410
@@ -484,7 +483,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     params = dict()
     params['num_instances'] = self.num_slots.value()
 
-    for inst_type in ZYNC.INSTANCE_TYPES:
+    for inst_type in self.zync_conn.INSTANCE_TYPES:
       if self.instance_type.value().startswith(inst_type):
         params['instance_type'] = inst_type
 
@@ -507,7 +506,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     params['skip_check'] = '1' if self.skip_check.value() else '0'
     params['notify_complete'] = '0'
 
-    if ('shotgun' in ZYNC.FEATURES and ZYNC.FEATURES['shotgun'] == 1
+    if ('shotgun' in self.zync_conn.FEATURES and self.zync_conn.FEATURES['shotgun'] == 1
       and self.sg_create_version.value()):
       params['sg_user'] = self.sg_user.value()
       params['sg_project'] = self.sg_project.value()
@@ -523,7 +522,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     Raises:
       zync.ZyncError for any issues found
     """
-    if not ZYNC.has_user_login():
+    if not self.zync_conn.has_user_login():
       raise zync.ZyncError('Please login before submitting a job.')
 
     if self.existing_project.value().strip() == '' and self.new_project.value().strip() == '':
@@ -562,7 +561,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     else:
       viewer_input, viewed_node = None, None
 
-    new_script = ZYNC.generate_file_path(nuke.root().knob('name').getValue())
+    new_script = self.zync_conn.generate_file_path(nuke.root().knob('name').getValue())
     with WriteChanges(new_script):
       # The WriteChanges context manager allows us to save the
       # changes to the current session to the given script, leaving
@@ -611,7 +610,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
       render_params = self.get_params()
       if render_params == None:
         return
-      ZYNC.submit_job('nuke', new_script, ','.join(selected_write_names), render_params)
+      self.zync_conn.submit_job('nuke', new_script, ','.join(selected_write_names), render_params)
     except zync.ZyncPreflightError as e:
       raise Exception('Preflight Check Failed:\n\n%s' % (str(e),))
 
@@ -641,9 +640,9 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     elif knob is self.loginButton:
       # run the auth flow, and display the user's email address,
       # adding a little whitespace padding for visual clarity.
-      self.userLabel.setValue('  %s' % ZYNC.login_with_google())
+      self.userLabel.setValue('  %s' % self.zync_conn.login_with_google())
     elif knob is self.logoutButton:
-      ZYNC.logout()
+      self.zync_conn.logout()
       self.userLabel.setValue('')
     elif knob is self.upload_only:
       checked = self.upload_only.value()
@@ -685,15 +684,13 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     field_name = 'CP-ZYNC-%s-NUKE' % (machine_type_base.upper(),)
     if 'PREEMPTIBLE' in machine_type.upper():
       field_name += '-PREEMPTIBLE'
-    if (field_name in ZYNC.PRICING['gcp_price_list'] and
-      'us' in ZYNC.PRICING['gcp_price_list'][field_name]):
+    if (field_name in self.zync_conn.PRICING['gcp_price_list'] and
+      'us' in self.zync_conn.PRICING['gcp_price_list'][field_name]):
       cost = '$%.02f' % ((float(num_machines) *
-        ZYNC.PRICING['gcp_price_list'][field_name]['us']),)
+        self.zync_conn.PRICING['gcp_price_list'][field_name]['us']),)
     else:
       cost = 'Not Available'
     self.pricing_label.setValue('Est. Cost per Hour: %s' % (cost,))
 
 def submit_dialog():
-  global ZYNC
-  ZYNC = zync.Zync('nuke_plugin', API_KEY)
   ZyncRenderPanel().showModalDialog()
