@@ -22,6 +22,10 @@ import time
 import traceback
 import urllib
 
+
+__version__ = '1.0.0'
+
+
 if os.environ.get('ZYNC_API_DIR'):
   API_DIR = os.environ.get('ZYNC_API_DIR')
 else:
