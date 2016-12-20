@@ -23,7 +23,7 @@ import traceback
 import urllib
 
 
-__version__ = '1.0.0'
+__version__ = '1.0.1'
 
 
 if os.environ.get('ZYNC_API_DIR'):
@@ -485,6 +485,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     Returns a dictionary of the job parameters from the submit render gui.
     """
     params = dict()
+    params['plugin_version'] = __version__
     params['num_instances'] = self.num_slots.value()
 
     for inst_type in self.zync_conn.INSTANCE_TYPES:
