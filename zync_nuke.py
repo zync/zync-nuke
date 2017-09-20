@@ -23,7 +23,7 @@ import traceback
 import urllib
 
 
-__version__ = '1.0.3'
+__version__ = '1.0.4'
 
 
 if os.environ.get('ZYNC_API_DIR'):
@@ -369,7 +369,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     self.priority = nuke.Int_Knob('priority', 'Job Priority:')
     self.priority.setDefaultValue((50,))
 
-    self.skip_check = nuke.Boolean_Knob('skip_check', 'Skip File Check')
+    self.skip_check = nuke.Boolean_Knob('skip_check', 'Skip File Sync')
     self.skip_check.setFlag(nuke.STARTLINE)
 
     first = nuke.root().knob('first_frame').value()
