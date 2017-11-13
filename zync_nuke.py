@@ -23,7 +23,7 @@ import traceback
 import urllib
 
 
-__version__ = '1.0.4'
+__version__ = '1.0.5'
 
 
 if os.environ.get('ZYNC_API_DIR'):
