@@ -23,7 +23,7 @@ import traceback
 import urllib
 
 
-__version__ = '1.0.5'
+__version__ = '1.0.6'
 
 
 if os.environ.get('ZYNC_API_DIR'):
@@ -510,6 +510,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     params['start_new_instances'] = '1'
     params['skip_check'] = '1' if self.skip_check.value() else '0'
     params['notify_complete'] = '0'
+    params['scene_info'] = {'nuke_version': nuke.NUKE_VERSION_STRING}
 
     if ('shotgun' in self.zync_conn.FEATURES and self.zync_conn.FEATURES['shotgun'] == 1
       and self.sg_create_version.value()):
