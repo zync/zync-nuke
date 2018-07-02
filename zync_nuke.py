@@ -23,7 +23,7 @@ import traceback
 import urllib
 
 
-__version__ = '1.0.6'
+__version__ = '1.0.9'
 
 
 if os.environ.get('ZYNC_API_DIR'):
@@ -480,6 +480,28 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     self.writeListNames = self.writeDict.keys()
     self.writeListNames.sort()
 
+  def get_caravr_version(self):
+    """
+    Returns CaraVR version, if present or empty string otherwise.
+    
+    To discover CaraVR we use plugin path list, which should contain a record of the form:
+    '/Library/Application Support/Nuke/10.0/plugins/CaraVR/1.0/ToolSets/CaraVR' (OSX)
+    'C:\\Program Files\\Common Files/Nuke/11.0/plugins\\CaraVR\\1.0\\ToolSets/CaraVR' (Windows)
+    We take path apart from the right until we encounter "ToolSet" component and the one preceding it is
+    considered to be a version. This has been offered as a canonical way by The Foundry Support. 
+    """
+    cara_plugins = nuke.plugins(nuke.ALL, 'CaraVR')
+    for cara_plugin in cara_plugins:
+      if 'toolsets' in cara_plugin.lower():
+        remaining_path = cara_plugin.lower()
+        last_folder_name = ''
+        while remaining_path:
+          remaining_path, folder_name = os.path.split(remaining_path)
+          if last_folder_name == 'toolsets':
+            return folder_name
+          last_folder_name = folder_name
+    return None
+
   def get_params(self):
     """
     Returns a dictionary of the job parameters from the submit render gui.
@@ -511,6 +533,9 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     params['skip_check'] = '1' if self.skip_check.value() else '0'
     params['notify_complete'] = '0'
     params['scene_info'] = {'nuke_version': nuke.NUKE_VERSION_STRING}
+    caravr_version = self.get_caravr_version()
+    if caravr_version:
+      params['scene_info']['caravr_version'] = caravr_version
 
     if ('shotgun' in self.zync_conn.FEATURES and self.zync_conn.FEATURES['shotgun'] == 1
       and self.sg_create_version.value()):
