@@ -23,7 +23,7 @@ import traceback
 import urllib
 
 
-__version__ = '1.0.9'
+__version__ = '1.0.11'
 
 
 if os.environ.get('ZYNC_API_DIR'):
@@ -532,7 +532,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     params['start_new_instances'] = '1'
     params['skip_check'] = '1' if self.skip_check.value() else '0'
     params['notify_complete'] = '0'
-    params['scene_info'] = {'nuke_version': nuke.NUKE_VERSION_STRING}
+    params['scene_info'] = {'nuke_version': nuke.NUKE_VERSION_STRING, 'views': nuke.views()}
     caravr_version = self.get_caravr_version()
     if caravr_version:
       params['scene_info']['caravr_version'] = caravr_version
@@ -592,7 +592,10 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     else:
       viewer_input, viewed_node = None, None
 
-    new_script = self.zync_conn.generate_file_path(nuke.root().knob('name').getValue())
+    script_path = nuke.root().knob('name').getValue()
+    new_script = self.maybe_correct_path_separators(script_path, self.zync_conn.generate_file_path)
+    write_node_to_user_path_map = dict()
+    read_dependencies = []
     with WriteChanges(new_script):
       # The WriteChanges context manager allows us to save the
       # changes to the current session to the given script, leaving
@@ -626,6 +629,10 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
           node_list = nuke.allNodes()
         for node in node_list:
           freeze_node(node)
+        for write_name in selected_write_names:
+          output_path, _ = os.path.split(nuke.toNode(write_name).knob('file').value())
+          write_node_to_user_path_map[write_name] = output_path
+        read_dependencies = [nuke.filename(read_node) for read_node in node_list if read_node.Class() == 'Read']
 
     if not preflight_result:
       return
@@ -641,6 +648,8 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
       render_params = self.get_params()
       if render_params == None:
         return
+      render_params['scene_info']['write_node_to_output_map'] = write_node_to_user_path_map
+      render_params['scene_info']['files'] = read_dependencies
       self.zync_conn.submit_job('nuke', new_script, ','.join(selected_write_names), render_params)
     except zync.ZyncPreflightError as e:
       raise Exception('Preflight Check Failed:\n\n%s' % (str(e),))
@@ -722,6 +731,15 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
     else:
       cost = 'Not Available'
     self.pricing_label.setValue('Est. Cost per Hour: %s' % (cost,))
+
+  def maybe_correct_path_separators(self, path, action):
+    if os.sep != '/':
+      path = path.replace('/', os.sep)
+    path = self.zync_conn.generate_file_path(path)
+    if os.sep != '/':
+      path = path.replace(os.sep, '/')
+    return path
+
 
 def submit_dialog():
   ZyncRenderPanel().showModalDialog()
