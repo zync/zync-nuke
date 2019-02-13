@@ -10,21 +10,13 @@ Usage as a menu item:
   menu.addCommand('Render on Zync', 'zync_nuke.submit_dialog()')
 """
 
-import hashlib
 import nuke
 import nukescripts
 import platform
 import os
 import re
-import socket
-import sys
-import time
-import traceback
-import urllib
 
-
-__version__ = '1.0.11'
-
+__version__ = '1.1.0'
 
 if os.environ.get('ZYNC_API_DIR'):
   API_DIR = os.environ.get('ZYNC_API_DIR')
@@ -71,19 +63,6 @@ def select_deps(nodes):
     for node in get_dependent_nodes(node):
       node.setSelected(True)
 
-def freeze_stereo_node(node, view=None):
-  """
-  Freezes the given stereo node, removes any expressions and creates a L/R
-  """
-  freeze_node(node)
-
-  if view:
-    file_name = node.knob('file').value()
-    file_name = file_name.replace('%v', view.lower())
-    file_name = file_name.replace('%V', view.upper())
-
-    node.knob('file').setValue(file_name)
-
 def freeze_node(node, view=None):
   """
   If the node has an expression, evaluate it so that Zync receives a file
@@ -92,60 +71,77 @@ def freeze_node(node, view=None):
   knob_names = ['file', 'font']
   for knob_name in knob_names:
     knob = node.knob(knob_name)
-    if knob == None:
+    if knob == None or not isinstance(knob.value(), basestring):
       continue
-    knob_value = knob.value()
-    # If the value returned is not a string, do not continue.
-    if not isinstance(knob_value, basestring):
-      continue
-    # If the knob value has an open bracket, assume it's an expression.
-    if '[' in knob_value:
-      if node.Class() == 'Write':
-        knob.setValue(nuke.filename(node))
-      else:
-        # Running knob.evaluate() will freeze not just expressions, but
-        # frame number as well. Use regex to search for any frame number
-        # expressions, and replace them with a placeholder.
-        to_eval = knob_value
-        placeholders = {}
-        regexs = [
+    _evaluate_path_expression(node, knob)
+    # Nuke scene can have file paths relative to project directory
+    if node.Class() == 'Write' or node.Class() == 'Read':
+      _maybe_absolutize_path(knob)
+    if view:
+      _expand_view_tokens_in_path(knob, view)
+    _clean_path(knob)
+
+def _evaluate_path_expression(node, knob):
+  knob_value = knob.value()
+  # If the knob value has an open bracket, assume it's an expression.
+  if '[' in knob_value:
+    if node.Class() == 'Write':
+      knob.setValue(nuke.filename(node))
+    else:
+      # Running knob.evaluate() will freeze not just expressions, but
+      # frame number as well. Use regex to search for any frame number
+      # expressions, and replace them with a placeholder.
+      to_eval = knob_value
+      placeholders = {}
+      regexs = [
           r'#+',
           r'%.*d'
-        ]
-        for regex in regexs:
-          match = 1
-          while match:
-            match = re.search(regex, to_eval)
-            if match:
-              placeholder = '__frame%d' % (len(placeholders)+1,)
-              original = match.group()
-              placeholders[placeholder] = original
-              to_eval = (to_eval[0:match.start()] + '{%s}' % (placeholder,) +
-                to_eval[match.end():])
-        # Set the knob value to our string with placeholders.
-        knob.setValue(to_eval)
-        # Now evaluate the knob to freeze the path.
-        frozen_path = knob.evaluate()
-        # Use our dictionary of placeholders to place the original frame
-        # number expressions back in.
-        frozen_path = frozen_path.format(**placeholders)
-        # Finally, set the frozen path back to the knob.
-        knob.setValue(frozen_path)
-    # For Write node paths, if the path is relative expand it using the
-    # project directory. If no project directory is set, fall back to
-    # using the directory in which the Nuke script lives.
-    if node.Class() == 'Write':
-      if not os.path.isabs(knob.value()):
-        project_dir = nuke.root().knob('project_directory').evaluate()
-        if not project_dir:
-          project_dir = os.path.dirname(nuke.root().knob('name').getValue())
-        absolute_path = os.path.abspath(os.path.join(project_dir, knob.value()))
-        knob.setValue(absolute_path)
-    # If a view was given, replace view expressions with that.
-    if view:
-      knob_value = knob_value.replace('%v', view.lower())
-      knob_value = knob_value.replace('%V', view.upper())
-      node.knob(knob_name).setValue(knob_value)
+      ]
+      for regex in regexs:
+        match = 1
+        while match:
+          match = re.search(regex, to_eval)
+          if match:
+            placeholder = '__frame%d' % (len(placeholders)+1,)
+            original = match.group()
+            placeholders[placeholder] = original
+            to_eval = (to_eval[0:match.start()] + '{%s}' % (placeholder,) +
+                       to_eval[match.end():])
+      # Set the knob value to our string with placeholders.
+      knob.setValue(to_eval)
+      # Now evaluate the knob to freeze the path.
+      frozen_path = knob.evaluate()
+      # Use our dictionary of placeholders to place the original frame
+      # number expressions back in.
+      frozen_path = frozen_path.format(**placeholders)
+      # Finally, set the frozen path back to the knob.
+      knob.setValue(frozen_path)
+
+def _maybe_absolutize_path(knob):
+  if not os.path.isabs(knob.value()):
+    project_dir = _get_project_directory()
+    absolute_path = os.path.abspath(os.path.join(project_dir, knob.value()))
+    knob.setValue(absolute_path)
+
+def _get_project_directory():
+  project_dir = nuke.root().knob('project_directory').evaluate()
+  if not project_dir:
+    # When no project dir is set, return the dir in which Nuke scene lives
+    project_dir = os.path.dirname(nuke.root().knob('name').getValue())
+  return project_dir
+
+def _expand_view_tokens_in_path(knob, view):
+  view_expanded_path = knob.value()
+  # token %v is replaced with the first letter of the view name
+  view_expanded_path = view_expanded_path.replace('%v', view[0])
+  # token %V is replaced with the full name of the view
+  view_expanded_path = view_expanded_path.replace('%V', view)
+  knob.setValue(view_expanded_path)
+
+def _clean_path(knob):
+  path = knob.value()
+  path = path.replace('\\', '/')
+  knob.setValue(path)
 
 def gizmos_to_groups(nodes):
   """
@@ -164,67 +160,6 @@ def gizmos_to_groups(nodes):
       node.setSelected(True)
       node.makeGroup()
       nuke.delete(node)
-
-def clear_nodes_by_name(names):
-  """
-  Removes nodes that match any of the names given.
-  """
-  nodes = (x for x in nuke.allNodes())
-  for node in nodes:
-    for name in names:
-      if name in node.name():
-        nuke.delete(node)
-
-def clear_callbacks(node):
-  """
-  Call and clear the callbacks on the given node
-
-  WARNING: only supports the create_write_dirs callback
-  """
-  names = ('beforeRender', 'beforeFrameRender', 'afterFrameRender', 'afterRender')
-  knobs = (node.knob(x) for x in names)
-  for knob in knobs:
-    knob_val = knob.value()
-    if 'create_write_dirs' in knob_val:
-      try:
-        create_write_dirs(node)
-      except NameError:
-        nuke.callbacks.create_write_dirs(node)
-      knob.setValue('')
-
-def clear_view(node):
-  """
-  Sets the node's 'views' knob to left, for maximum ZYNC compatibility.
-  """
-  if 'views' in node.knobs():
-    node.knob('views').setValue('left')
-
-def is_stereo(node):
-  """
-  If the node is stereo (i.e. has %v or %V in the path)
-  """
-  path = node.knob('file').value()
-  return '%v' in path or '%V' in path
-
-def is_valid(node):
-  """
-  Checks if the readnode is valid: if it has spaces or apostrophes in the
-  name, it's invalid.
-  """
-  path = node.knob('file').value()
-  return ' ' in path or '\'' in path
-
-def stereo_script():
-  for read in (x for x in nuke.allNodes() if x.Class() == 'Read'):
-    if is_stereo(read):
-      return True
-  for write in (x for x in nuke.allNodes() if x.Class() == 'Write'):
-    if is_stereo(write):
-      return True
-    if 'left right' == write.knob('views').value():
-      return True
-
-  return False
 
 def preflight(view=None):
   """
