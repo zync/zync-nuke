@@ -15,7 +15,13 @@ import platform
 import os
 import re
 
-__version__ = '1.2.0'
+__version__ = '1.3.3'
+
+READ_NODE_CLASSES = ['AudioRead', 'Axis', 'Axis2', 'Camera', 'Camera2', 'DeepRead', 'OCIOFileTransform',
+                     'ParticleCache', 'Precomp', 'Read', 'ReadGeo', 'ReadGeo2', 'Vectorfield' ]
+WRITE_NODE_CLASSES = ['DeepWrite', 'GenerateLUT', 'Write', 'WriteGeo']
+PATH_KNOB_NAMES = ['proxy', 'file', 'vfield_file']
+
 
 if os.environ.get('ZYNC_API_DIR'):
   API_DIR = os.environ.get('ZYNC_API_DIR')
@@ -71,12 +77,16 @@ def freeze_node(node, view=None):
   def is_knob_rewritable(knob):
     return knob is not None and isinstance(knob.value(), basestring) and knob.value()
 
-  knob_names = ['file', 'font', 'proxy']
-  for knob_name in knob_names:
+  node_classes_to_absolutize = ['AudioRead', 'Axis', 'Axis2' 'Camera', 'Camera2' 'DeepRead', 'DeepWrite',
+                                'GenerateLUT', 'OCIOFileTransform', 'ParticleCache',
+                                'Precomp', 'Read', 'ReadGeo', 'ReadGeo2', 'Vectorfield',
+                                'Write', 'WriteGeo']
+
+  for knob_name in PATH_KNOB_NAMES:
     knob = node.knob(knob_name)
     if is_knob_rewritable(knob):
       _evaluate_path_expression(node, knob)
-      if node.Class() == 'Write' or node.Class() == 'Read':
+      if node.Class() in node_classes_to_absolutize:
         # Nuke scene can have file paths relative to project directory
         _maybe_absolutize_path(knob)
       if view:
@@ -88,7 +98,7 @@ def _evaluate_path_expression(node, knob):
   knob_value = knob.value()
   # If the knob value has an open bracket, assume it's an expression.
   if '[' in knob_value:
-    if node.Class() == 'Write':
+    if node.Class() in WRITE_NODE_CLASSES:
       knob.setValue(nuke.filename(node))
     else:
       # Running knob.evaluate() will freeze not just expressions, but frame number as well. Use regex to search for
@@ -288,7 +298,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
 
     selected_write_nodes = []
     for node in nuke.selectedNodes():
-      if node.Class() == 'Write':
+      if node.Class() in WRITE_NODE_CLASSES:
         selected_write_nodes.append(node.name())
     self.writeNodes = []
     col_num = 1
@@ -365,13 +375,14 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
 
   def update_write_dict(self):
     wd = dict()
-    for node in (x for x in nuke.allNodes() if x.Class() == 'Write'):
+    for node in (x for x in nuke.allNodes() if x.Class() in WRITE_NODE_CLASSES):
       if not node.knob('disable').value():
         wd[node.name()] = node
 
     self.writeDict.update(wd)
     self.writeListNames = self.writeDict.keys()
     self.writeListNames.sort()
+
 
   @staticmethod
   def _get_caravr_version():
@@ -501,7 +512,7 @@ class ZyncRenderPanel(nukescripts.panels.PythonPanel):
           freeze_node(node)
 
         _collect_write_node_paths(selected_write_names, write_node_to_user_path_map)
-        read_nodes = [read_node for read_node in node_list if read_node.Class() == 'Read']
+        read_nodes = [read_node for read_node in node_list if read_node.Class() in READ_NODE_CLASSES]
         _collect_read_node_paths(read_nodes, read_dependencies)
 
     # reconnect the viewer
@@ -598,12 +609,15 @@ def _collect_write_node_paths(selected_write_node_names, write_node_to_user_path
 
 def _collect_read_node_paths(read_nodes, read_node_path_list):
   for read_node in read_nodes:
-    if read_node.proxy():
+    read_path = None
+    if hasattr(read_node, 'proxy') and read_node.proxy():
       read_path = read_node.knob('proxy').value()
+    if not read_path:
       # If proxy is empty, Nuke uses original file path and rescales, so the original file is a dependency to upload
-      if not read_path:
-        read_path = read_node.knob('file').value()
-    else:
-      read_path = read_node.knob('file').value()
+      for knob_name in PATH_KNOB_NAMES:
+        if knob_name != 'proxy' and read_node.knob(knob_name):
+          read_path = read_node.knob(knob_name).value()
+          if read_path:
+            break
     if read_path:
       read_node_path_list.append(read_path)
