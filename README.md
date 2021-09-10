@@ -1,5 +1,7 @@
 # Zync Plugin for Nuke
 
+**Notice:** this project has been archived and is no longer being maintained.
+
 Tested with all versions of Nuke 7 and 8.
 
 ## zync-python
